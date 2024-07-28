@@ -2,13 +2,15 @@ package main
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"os"
 )
 
 type TransactionLogger interface {
 	WriteDelete(key string)
-	WritePut(key, value string)
+	WritePut(key string, value Value)
 	ReadEvents() (<-chan Event, <-chan error)
 	Run()
 	Err() <-chan error
@@ -18,10 +20,12 @@ type Event struct {
 	Sequence  uint64
 	EventType EventType
 	Key       string
-	Value     string
+	Value     Value
 }
 
 type EventType byte
+
+type Value []byte
 
 type FileTransactionLogger struct {
 	events       chan<- Event
@@ -36,7 +40,7 @@ const (
 	EventPut
 )
 
-func (l *FileTransactionLogger) WritePut(key, value string) {
+func (l *FileTransactionLogger) WritePut(key string, value Value) {
 	l.events <- Event{EventType: EventPut, Key: key, Value: value}
 }
 
@@ -72,7 +76,7 @@ func (l *FileTransactionLogger) Run() {
 			_, err := fmt.Fprintf(
 				l.file,
 				"%d\t%d\t%s\t%s\n",
-				l.lastSequence, e.EventType, e.Key, e.Value)
+				l.lastSequence, e.EventType, e.Key, e.Value.encode())
 
 			if err != nil {
 				errors <- err
@@ -80,6 +84,24 @@ func (l *FileTransactionLogger) Run() {
 			}
 		}
 	}()
+}
+
+func(src Value) encode() []byte {
+
+	dst := make([]byte, hex.EncodedLen(len(src)))
+	hex.Encode(dst, src)
+
+	return dst
+}
+
+func (src Value) decode() []byte {
+	dst := make([]byte, hex.DecodedLen(len(src)))
+	_, err := hex.Decode(dst, src)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return dst
 }
 
 func (l *FileTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {

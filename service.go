@@ -13,8 +13,8 @@ import (
 
 var store = struct {
 	sync.RWMutex
-	m map[string]string
-}{m: make(map[string]string)}
+	m map[string]Value
+}{m: make(map[string]Value)}
 
 var ErrorNoSuchKey = errors.New("no such key")
 
@@ -86,14 +86,14 @@ func PutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := Put(key, string(value)); err != nil {
+	if err := Put(key, value); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	logger.WritePut(key, string(value))
+	logger.WritePut(key, value)
 
 }
 
@@ -118,7 +118,7 @@ func GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(res))
+	w.Write(res)
 }
 
 func DeleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func Put(key string, value string) error {
+func Put(key string, value Value) error {
 	store.Lock()
 	store.m[key] = value
 	store.Unlock()
@@ -145,16 +145,16 @@ func Put(key string, value string) error {
 
 }
 
-func Get(key string) (string, error) {
+func Get(key string) (Value, error) {
 	store.RLock()
 	value, ok := store.m[key]
 	store.RUnlock()
 
 	if !ok {
-		return "", ErrorNoSuchKey
+		return nil, ErrorNoSuchKey
 	}
 
-	return value, nil
+	return value.decode(), nil
 
 }
 
